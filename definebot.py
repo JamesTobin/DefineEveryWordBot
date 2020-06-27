@@ -14,19 +14,21 @@ auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
 api = tweepy.API(auth)
 
 
-# def defineWord(word): #beautifulsoup version
-#     try:
-#         page = requests.get("https://www.merriam-webster.com/dictionary/" + str(word))
-#         soup = BeautifulSoup(page.content, 'html.parser')
-#         info = soup.find(class_="vg")
-#         text = info.find(class_='dtText').get_text()
-#         text=text[2:]
-#         word_type = soup.find(class_='fl').get_text()
-#         # print(text)
-#         # print(word_type)
-# #         return str(word) + ' (' + word_type + '): ' + text
-    # except:
-    #         return str(word) + ": We're not sure about this one..."
+def defineWordBS(word): #beautifulsoup version, web-scrapes in case of TypeError exception
+    try:
+        phrase = "In case you didn't know..."
+        page = requests.get("https://www.merriam-webster.com/dictionary/" + str(word))
+        soup = BeautifulSoup(page.content, 'html.parser')
+        info = soup.find(class_="vg")
+        text = info.find(class_='dtText').get_text()
+        text=text[2:]
+        word_type = soup.find(class_='fl').get_text()
+        # print(text)
+        # print(word_type)
+        return(phrase + '\n' +
+                str(word) + ' (' + word_type + '): ' + text)
+    except:
+            return str(word) + ": We're not sure about this one... or at least Merriam Webster isn't..."
 
 def defineWord(word):
     keyfile = open(r"C:\Users\noahk\DefineEveryWordBot\mwkey.txt", 'r')
@@ -44,7 +46,7 @@ def defineWord(word):
         try:
             definitions = meaning['shortdef']
         except TypeError:
-            return word + ": We're not too sure about this one... or at least Merriam Webster isn't..."
+            return defineWordBS(word)
         # if meaning['meta']['id'] != word:
             # print("\n"+meaning['meta']['id'])
         # try:
@@ -116,14 +118,15 @@ def replyToTweet():
         words = text.split()
         word = words[1]
         definition = defineWord(word)
+        # print(definition)
         if len(definition) >= 266:
             definition = definition[:266]
         api.update_status(status = '@' + 'fckeveryword' + ' ' + definition, in_reply_to_status_id = most_recent.id_str)
 
 while(True):
     start = time.time()
-    print("replying to new tweet...")
     replyToTweet()
+    print("Defined a new word!")
     end = time.time()
     time.sleep(1800-(end-start))
         
