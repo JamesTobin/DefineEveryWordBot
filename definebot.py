@@ -14,7 +14,7 @@ auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
 api = tweepy.API(auth)
 
 
-# def defineWord(word):
+# def defineWord(word): #beautifulsoup version
 #     try:
 #         page = requests.get("https://www.merriam-webster.com/dictionary/" + str(word))
 #         soup = BeautifulSoup(page.content, 'html.parser')
@@ -29,7 +29,7 @@ api = tweepy.API(auth)
     #         return str(word) + ": We're not sure about this one..."
 
 def defineWord(word):
-    keyfile = open(r"C:\Users\noahk\DefineEveryWord\mwkey.txt", 'r')
+    keyfile = open(r"C:\Users\noahk\DefineEveryWordBot\mwkey.txt", 'r')
     keys = keyfile.readline()
     word = str(word)
     phrase = "In case you didn't know..."
@@ -38,11 +38,13 @@ def defineWord(word):
     response = urllib.request.urlopen(urlfrmt)
     jsStruct = json.load(response)
     if jsStruct == []:
-        return word + ": We're not too sure about this one..."
+        return word + ": We're not too sure about this one... or at least Merriam Webster isn't..."
 
-    print(jsStruct)
     for meaning in jsStruct:
-        definitions = meaning['shortdef']
+        try:
+            definitions = meaning['shortdef']
+        except TypeError:
+            return word + ": We're not too sure about this one... or at least Merriam Webster isn't..."
         # if meaning['meta']['id'] != word:
             # print("\n"+meaning['meta']['id'])
         # try:
@@ -69,7 +71,7 @@ def defineWord(word):
 
         
 
-    # print("\nUsage")
+    # print("\nUsage") #For including usage
 
     # for usage in jsStruct:
     #     try:
@@ -104,7 +106,7 @@ def store_last_id(last_seen_id, file_name):
     return
 
 def replyToTweet():
-    filename = r'C:\Users\noahk\DefineEveryWord\last_seen_id.txt'
+    filename = r'C:\Users\noahk\DefineEveryWordBot\last_seen_id.txt'
     stuff = api.user_timeline(screen_name = 'fckeveryword', count = 1)
     most_recent = stuff[0]
     last_seen_id = get_last_id(filename)
@@ -114,15 +116,15 @@ def replyToTweet():
         words = text.split()
         word = words[1]
         definition = defineWord(word)
-        print(definition)
         if len(definition) >= 266:
             definition = definition[:266]
         api.update_status(status = '@' + 'fckeveryword' + ' ' + definition, in_reply_to_status_id = most_recent.id_str)
 
-# while(True):
-#     start = time.time()
-#     replyToTweet()
-#     end = time.time()
-#     time.sleep(1800-(end-start)+0.01)
-
-replyToTweet()
+while(True):
+    start = time.time()
+    print("replying to new tweet...")
+    replyToTweet()
+    end = time.time()
+    time.sleep(1800-(end-start))
+        
+# replyToTweet() #for single runs
