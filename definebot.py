@@ -107,7 +107,7 @@ def store_last_id(last_seen_id, file_name):
     f_write.close()
     return
 
-def replyToTweet():
+def makeTweets():
     filename = r'C:\Users\noahk\DefineEveryWordBot\last_seen_id.txt'
     stuff = api.user_timeline(screen_name = 'fckeveryword', count = 1)
     most_recent = stuff[0]
@@ -118,16 +118,27 @@ def replyToTweet():
         words = text.split()
         word = words[1]
         definition = defineWord(word)
+        reply_definition = definition
         # print(definition)
         if len(definition) >= 266:
-            definition = definition[:266]
-        api.update_status(status = '@' + 'fckeveryword' + ' ' + definition, in_reply_to_status_id = most_recent.id_str)
+            reply_definition = definition[:266]
+        api.update_status(status = '@' + 'fckeveryword' + ' ' + reply_definition, in_reply_to_status_id = most_recent.id_str)
+        tweet_definition = definition[26:]
+        if len(tweet_definition) >= 248-len(word):
+            tweet_definition = definition[:248-len(word)]
+        tweet_string = 'Yay! @fckeveryword just fucked ' + word + '!' + '\n' + tweet_definition
+        api.update_status(status = tweet_string)
 
-while(True):
-    start = time.time()
-    replyToTweet()
-    print("Defined a new word!")
-    end = time.time()
-    time.sleep(1800-(end-start))
+def main():
+    while(True):
+        start = time.time()
+        makeTweets()
+        print("Defined a new word!")
+        end = time.time()
+        time.sleep(1800-(end-start))
+
+# def main():
+#   makeTweets() #for single runs
         
-# replyToTweet() #for single runs
+if __name__ == '__main__':
+    main()
