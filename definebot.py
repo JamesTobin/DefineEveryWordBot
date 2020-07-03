@@ -5,6 +5,7 @@ import json
 import urllib.request
 import re
 import time
+import os 
 
 from tweepy_keys import *
 
@@ -16,7 +17,6 @@ api = tweepy.API(auth)
 
 def defineWordBS(word): #beautifulsoup version, web-scrapes in case of TypeError exception
     try:
-        phrase = "In case you didn't know..."
         page = requests.get("https://www.merriam-webster.com/dictionary/" + str(word))
         soup = BeautifulSoup(page.content, 'html.parser')
         info = soup.find(class_="vg")
@@ -25,8 +25,7 @@ def defineWordBS(word): #beautifulsoup version, web-scrapes in case of TypeError
         word_type = soup.find(class_='fl').get_text()
         # print(text)
         # print(word_type)
-        return(phrase + '\n' +
-                str(word) + ' (' + word_type + '): ' + text)
+        return(str(word) + ' (' + word_type + '): ' + text)
     except:
             return str(word) + ": We're not sure about this one... or at least Merriam Webster isn't..."
 
@@ -34,7 +33,6 @@ def defineWord(word):
     keyfile = open(r"C:\Users\noahk\DefineEveryWordBot\mwkey.txt", 'r')
     keys = keyfile.readline()
     word = str(word)
-    phrase = "In case you didn't know..."
     result=[]
     urlfrmt = "https://dictionaryapi.com/api/v3/references/collegiate/json/"+word+"?key=" + keys
     response = urllib.request.urlopen(urlfrmt)
@@ -54,24 +52,19 @@ def defineWord(word):
         for i, eachDef in enumerate(definitions, 1):
             result.append(str(i) + ". " + eachDef)
         try:
-            return (phrase + '\n' +
-                    word + ' ('+meaning['fl']+'): ' + '\n' +
+            return (word + ' ('+meaning['fl']+'): ' + '\n' +
                     result[0] + '\n' +
                     result[1] + '\n' +
                     result[2])
         except:
             try:
-                return (phrase + '\n' +
-                        word + ' ('+meaning['fl']+'): ' + '\n' +
+                return (word + ' ('+meaning['fl']+'): ' + '\n' +
                         result[0] + '\n' +
                         result[1])
             except:
-                return (phrase + '\n' +
-                        word + ' ('+meaning['fl']+'): ' + '\n' +
+                return (word + ' ('+meaning['fl']+'): ' + '\n' +
                         result[0])
 
-
-        
 
     # print("\nUsage") #For including usage
 
@@ -107,38 +100,70 @@ def store_last_id(last_seen_id, file_name):
     f_write.close()
     return
 
+# def getImage(word):
+#     return img_file
+
+
 def makeTweets():
     filename = r'C:\Users\noahk\DefineEveryWordBot\last_seen_id.txt'
+    last_seen_id = get_last_id(filename)
     stuff = api.user_timeline(screen_name = 'fckeveryword', count = 1)
     most_recent = stuff[0]
-    last_seen_id = get_last_id(filename)
+    print(most_recent.id_str,last_seen_id,most_recent.id_str==last_seen_id)
     if most_recent.id_str != last_seen_id:
-        store_last_id(most_recent.id_str, filename)
+        phrase = "In case you didn't know..."
         text = most_recent.text
         words = text.split()
         word = words[1]
         definition = defineWord(word)
         reply_definition = definition
         # print(definition)
-        if len(definition) >= 266:
-            reply_definition = definition[:266]
-        api.update_status(status = '@' + 'fckeveryword' + ' ' + reply_definition, in_reply_to_status_id = most_recent.id_str)
-        tweet_definition = definition[26:]
-        if len(tweet_definition) >= 248-len(word):
-            tweet_definition = definition[:248-len(word)]
-        tweet_string = 'Yay! @fckeveryword just fucked ' + word + '!' + '\n' + tweet_definition
+        if len(reply_definition) >= 239:
+            reply_definition = reply_definition[:239]
+        if reply_definition.split()[1] == "We're":
+            api.update_status(status = '@' + 'fckeveryword' + ' ' + '\n' + reply_definition, in_reply_to_status_id = most_recent.id_str)
+        else:
+            api.update_status(status = '@' + 'fckeveryword' + ' ' + phrase + '\n' + reply_definition, in_reply_to_status_id = most_recent.id_str)
+        print("Replying with: " + '\n' + reply_definition)
+        if len(definition) >= 247-len(word):
+            definition = definition[:247-len(word)]
+        tweet_string = 'Yay! @fckeveryword just fucked ' + word + '!' + '\n' + definition
+        print("Tweeting out: " + '\n' + tweet_string)
         api.update_status(status = tweet_string)
+        store_last_id(most_recent.id_str, filename)
+        return 
 
 def main():
     while(True):
         start = time.time()
         makeTweets()
-        print("Defined a new word!")
+        print("----------TWEETS SENT---------- " + str(time.time()))
         end = time.time()
-        time.sleep(1800-(end-start))
+        time.sleep(1800 - (end-start) + .1)
+
+#function where if someone tweets:
+
+# @DefineAllWords ... #define <word> ...
+# we reply to their tweet with the definition, the same as it would be run for the fck bot
+
+# class MyStreamListener(tweepy.StreamListener):
+
+#     def on_status(self, status):
+#         print(status.text)
+
+    # def on_error(self, status_code):
+    #     if status_code == 420:-
+    #         #returning False in on_error disconnects the stream
+    #         return False
+
+# myStreamListener = MyStreamListener()
+# myStream = tweepy.Stream(auth = api.auth, listener=myStreamListener)
+
+# myStream.filter(track=['@DefineAllWords'])
 
 # def main():
 #   makeTweets() #for single runs
         
 if __name__ == '__main__':
     main()
+
