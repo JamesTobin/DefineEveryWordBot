@@ -6,9 +6,11 @@ import urllib.request
 import re
 import time
 import os 
+import re
+from google_images_search import GoogleImagesSearch
+import csv
 
 from tweepy_keys import *
-
 
 auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
 auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
@@ -21,15 +23,19 @@ def defineWordBS(word): #beautifulsoup version, web-scrapes in case of TypeError
         soup = BeautifulSoup(page.content, 'html.parser')
         info = soup.find(class_="vg")
         text = info.find(class_='dtText').get_text()
+        actual = soup.find(class_="hword").get_text()
         text=text[2:]
         word_type = soup.find(class_='fl').get_text()
-        # print(text)
-        # print(word_type)
-        return(str(word) + ' (' + word_type + '): ' + text)
+
+        if actual == word:
+            return(str(word) + ' (' + word_type + '): ' + text)
+        else:
+            return(str(word) + " --> " + actual + ' (' + word_type + '): ' + text)
     except:
             return str(word) + ": We're not sure about this one... or at least Merriam Webster isn't..."
 
-def defineWord(word):
+
+def defineWord(word): #defines word directly from merriam-webster api if possible
     keyfile = open(r"C:\Users\noahk\DefineEveryWordBot\mwkey.txt", 'r')
     keys = keyfile.readline()
     word = str(word)
@@ -44,11 +50,17 @@ def defineWord(word):
         try:
             definitions = meaning['shortdef']
         except TypeError:
+            print("---------Unknown Word, Rerouting to Scraper--------")
             return defineWordBS(word)
-        # if meaning['meta']['id'] != word:
-            # print("\n"+meaning['meta']['id'])
-        # try:
-        # print('('+meaning['fl']+')')
+
+        page = requests.get("https://www.merriam-webster.com/dictionary/" + str(word))
+        soup = BeautifulSoup(page.content, 'html.parser')
+
+        actual = soup.find(class_="hword").get_text()
+
+        if actual != word:
+            word = word + " --> " + actual
+
         for i, eachDef in enumerate(definitions, 1):
             result.append(str(i) + ". " + eachDef)
         try:
@@ -66,104 +78,242 @@ def defineWord(word):
                         result[0])
 
 
-    # print("\nUsage") #For including usage
+def getMediaID(word): #downloads and retrieves the media ID for an image of a requested word
+    try:
+        keyfile = open(r"C:\Users\noahk\DefineEveryWordBot\gkey.txt", 'r')
+        gkey = keyfile.readline()
+        cx_file = open(r"C:\Users\noahk\DefineEveryWordBot\cx_id.txt", 'r')
+        cx_id = str(cx_file.readline())
+        gis = GoogleImagesSearch(gkey, cx_id)
 
-    # for usage in jsStruct:
-    #     try:
-    #         longdefs = usage['def']
-    #         for i, eachDef in enumerate(longdefs, 1):
-    #             if 'sseq' in eachDef:
-    #                 # test[*][0][1]['dt'] - gives list of illustrations
-    #                 for ill in eachDef['sseq']:
-    #                     if 'dt' in ill[0][1]:
-    #                         for illus in ill[0][1]['dt']:
-    #                             if illus[0] == 'vis':
-    #                                 # enumerate
-    #                                 for ii in range(1, len(illus)):
-    #                                     L = len(illus[ii])
-    #                                     for jj in range(L):
-    #                                         if 't' in illus[ii][jj]:
-    #                                             # remove everything within braces before printing
-    #                                             print("* "+illus[ii][jj]['t'])
-    #     except KeyError:
-    #         return str(word) + ": We're not sure about this one..."
+        # define search params:
+        _search_params = {
+            'q': word,
+            'num': 1,
+            'safe': 'off',
+            # 'fileType': 'jpg|gif|png',
+            # 'imgType': 'clipart|face|lineart|news|photo',
+            # 'imgSize': 'huge|icon|large|medium|small|xlarge|xxlarge',
+            # 'imgDominantColor': 'black|blue|brown|gray|green|pink|purple|teal|white|yellow'
+        }
 
-def get_last_id(file_name):
-    f_read = open(file_name, 'r')
-    last_seen_id = str(f_read.read().strip())
-    f_read.close()
-    return last_seen_id
+        # this will search and download:
+        gis.search(search_params=_search_params, path_to_dir=r'C:\Users\noahk\DefineEveryWordBot\twitter-images')
 
-def store_last_id(last_seen_id, file_name):
-    f_write = open(file_name, 'w')
-    f_write.write(str(last_seen_id))
-    f_write.close()
-    return
+        img = os.listdir(r'C:\Users\noahk\DefineEveryWordBot\twitter-images')[0]
+        img_file = r'C:\Users\noahk\DefineEveryWordBot\twitter-images' + "\\" + img
 
-# def getImage(word):
-#     return img_file
+        media_list = []
+
+        p = open(r'C:\Users\noahk\DefineEveryWordBot\profanity.txt', 'r')
+        plist = []
+        for line in p:
+            plist.append(line.strip())
+
+        if word not in plist:
+            response = api.media_upload(img_file)
+            media_list.append(response.media_id_string)
+
+        return media_list
+    except:
+        return []
 
 
-def makeTweets():
-    filename = r'C:\Users\noahk\DefineEveryWordBot\last_seen_id.txt'
-    last_seen_id = get_last_id(filename)
-    stuff = api.user_timeline(screen_name = 'fckeveryword', count = 1)
-    most_recent = stuff[0]
-    print(most_recent.id_str,last_seen_id,most_recent.id_str==last_seen_id)
-    if most_recent.id_str != last_seen_id:
-        phrase = "In case you didn't know..."
-        text = most_recent.text
-        words = text.split()
-        word = words[1]
-        definition = defineWord(word)
-        reply_definition = definition
-        # print(definition)
-        if len(reply_definition) >= 239:
-            reply_definition = reply_definition[:239]
+def deleteImage():
+    d = os.listdir(r'C:\Users\noahk\DefineEveryWordBot\twitter-images')
+    if len(d)==1:
+        img = d[0]
+        img_file = r'C:\Users\noahk\DefineEveryWordBot\twitter-images' + "\\" + img
+        os.remove(img_file)
+
+def makeTweets(word,most_recent_id): #tweets reply with definition, and tweets out own definition
+    phrase = "In case you didn't know..."
+    definition = defineWord(word)
+    reply_definition = definition
+    media_id = getMediaID(word)
+    print("-------------REPLYING WITH:--------------")
+    if len(reply_definition) <= 239:
         if reply_definition.split()[1] == "We're":
-            api.update_status(status = '@' + 'fckeveryword' + ' ' + '\n' + reply_definition, in_reply_to_status_id = most_recent.id_str)
+            api.update_status(status = '@' + 'fckeveryword' + ' ' + '\n' + reply_definition, in_reply_to_status_id = most_recent_id)
+            print(reply_definition)
         else:
-            api.update_status(status = '@' + 'fckeveryword' + ' ' + phrase + '\n' + reply_definition, in_reply_to_status_id = most_recent.id_str)
-        print("Replying with: " + '\n' + reply_definition)
-        if len(definition) >= 247-len(word):
-            definition = definition[:247-len(word)]
+            api.update_status(status = '@' + 'fckeveryword' + ' ' + phrase + '\n' + reply_definition, in_reply_to_status_id = most_recent_id, media_ids=media_id)
+            print(reply_definition)
+    else:
+        first_definition = reply_definition[:239]
+        last_id = api.update_status(status = '@' + 'fckeveryword' + ' ' + phrase + '\n' + first_definition, in_reply_to_status_id = most_recent_id, media_ids=media_id).id_str
+        print(first_definition)
+        leftover = reply_definition[239:]
+        new_tweets = len(leftover)//280 + 1
+        last_length = len(leftover) % 280
+
+        print('Beginning reply chain: @' + 'fckeveryword' + ' ' + phrase + '\n' + first_definition)
+        for i in range(new_tweets):
+            if i == new_tweets - 1:
+                reply_tweet = leftover[:last_length]
+                api.update_status(status = reply_tweet, in_reply_to_status_id = last_id)
+                print(reply_tweet)
+            else:
+                reply_tweet = leftover[:280]
+                leftover = leftover[280:]
+                last_id = api.update_status(status = reply_tweet, in_reply_to_status_id = last_id).id_str
+                print(reply_tweet)
+    
+    print("------------- TWEETING OUT --------------")
+
+    if len(definition) <= 247-len(word):
         tweet_string = 'Yay! @fckeveryword just fucked ' + word + '!' + '\n' + definition
-        print("Tweeting out: " + '\n' + tweet_string)
-        api.update_status(status = tweet_string)
-        store_last_id(most_recent.id_str, filename)
-        return 
+        api.update_status(status = tweet_string, media_ids=media_id)
+        print(tweet_string)
+        print("------------FINISHED-------------")
+    else:
+        first_definition = definition[:247-len(word)]
+        leftover = definition[247-len(word):]
 
-def main():
+        new_tweets = len(leftover)//280 + 1
+        last_length = len(leftover) % 280
+
+        tweet_string = 'Yay! @fckeveryword just fucked ' + word + '!' + '\n' + first_definition
+
+        last_id  = api.update_status(status = tweet_string, media_ids=media_id).id_str
+
+        print("Beginning reply chain: " + tweet_string)
+
+        for i in range(new_tweets):
+            if i == new_tweets - 1:
+                reply_tweet = leftover[:last_length]
+                api.update_status(status = reply_tweet, in_reply_to_status_id = last_id)
+                print(reply_tweet)
+            else:
+                reply_tweet = leftover[:280]
+                leftover = leftover[280:]
+                last_id = api.update_status(status = reply_tweet, in_reply_to_status_id = last_id).id_str
+                print(reply_tweet)
+
+        print("------------FINISHED-------------")
+
+    deleteImage()
+    return 
+
+class MyStreamListener(tweepy.StreamListener): #Twitter StreamListener
+
+    def on_status(self, status):
+        processTweet(status)
+        return True
+
+    def on_error(self, status_code):
+        if status_code == 420:
+            #returning False in on_error disconnects the stream
+            return False
+
+def processTweet(status): #Define on command functionality, reroutes to makeTweets if appropriate
+
+    if "@DefineAllWords" in status.text and "#define" in status.text and "RT" not in status.text:
+        try:
+            print("Define request found: " + status.text)
+            words = status.text.split()
+            i = words.index("#define") + 1
+            chars = "".join(re.split("[^a-zA-Z]*", words[i]))
+            media_id = getMediaID(chars)
+            definition = defineWord(chars)
+            definition_phrase = "@" + status.user.screen_name + ' ' + status.user.name + ", here's " + chars + " defined! " + '\n' + definition
+            print(definition_phrase)
+            definition_length = len(definition_phrase)
+
+            if definition_length <= 280:
+                api.update_status(status = definition_phrase, in_reply_to_status_id = status.id_str, media_ids=media_id)
+
+            else:
+                first_definition = definition_phrase[:280]
+                leftover = definition_phrase[280:]
+
+                new_tweets = len(leftover)//280 + 1
+                last_length = len(leftover) % 280
+                last_id = api.update_status(status = first_definition, in_reply_to_status_id = status.id_str, media_ids=media_id).id_str
+
+                print("Beginning reply chain...")
+
+                for i in range(new_tweets):
+                    if i == new_tweets - 1:
+                        reply_tweet = leftover[:last_length]
+                        api.update_status(status = reply_tweet, in_reply_to_status_id = last_id)
+                        print(reply_tweet)
+                    else:
+                        reply_tweet = leftover[:280]
+                        leftover = leftover[280:]
+                        last_id = api.update_status(status = reply_tweet, in_reply_to_status_id = last_id).id_str
+                        print(reply_tweet)
+                        
+            deleteImage()
+
+        except Exception as e:
+            print("Define Request Exception Encountered:")
+            print(e)
+            exception_reply = "@" + status.user.screen_name + " Whoops! We either don't know that word or your request wasn't formatted correctly... To request a definition, tag me and include #define <insert a real word here>."
+            api.update_status(status = exception_reply, in_reply_to_status_id = status.id_str)
+            try:
+                deleteImage()
+            except:
+                pass
+        print("------------FINISHED-------------")
+                    
+    elif status.user.id_str == "944864788336824321":
+        print("New @fckeveryword tweet: " + status.text)
+        makeTweets(getWord(status),status.id_str)
+
+    else:
+        pass
+
+def getWord(status):
+    return status.text.split()[1]
+
+def main(): #initialize stream and handle the numerous potential exceptions
+    print("Running...")
     while(True):
-        start = time.time()
-        makeTweets()
-        print("----------TWEETS SENT---------- " + str(time.time()))
-        end = time.time()
-        time.sleep(1800 - (end-start) + .1)
+        api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+        myStreamListener = MyStreamListener(api)
+        myStream = tweepy.Stream(auth = api.auth, listener=myStreamListener)
+        try:
+            myStream.filter(follow=["944864788336824321"], track=["@DefineAllWords"])
+        except TimeoutError as t:
+            print("t")
+            print(t)
+            print("Connection timeout exception encountered, 15 min sleep...")
+            time.sleep(900)
+            print("Started over, Running...")
+        except ConnectionError as c:
+            print("c")
+            print(c)
+            print("Connection timeout exception encountered, 15 min sleep...")
+            time.sleep(900)
+            print("Started over, Running...")
+        except KeyboardInterrupt:
+            print("Stream manually interrupted, exiting.... program must be ran again. WARNING: Don't rerun too many times too quickly. It's best to wait 15 minutes.")
+            myStream.disconnect()
+            break
+        except TypeError as ty:
+            print("ty")
+            print(ty)
+            print("Tweet/Definition exception encountered, powering through in 10 seconds...")
+            time.sleep(10)
+            print("Started over, Running...")
+        except AttributeError as a:
+            print("a")
+            print(a)
+            print("Tweet/Definition exception encountered, powering through in 10 seconds...")
+            time.sleep(10)
+            print("Started over, Running...")
+        except ValueError as v:
+            print("v")
+            print(v)
+            print("Tweet/Definition exception encountered, powering through in 10 seconds...")
+            time.sleep(10)
+            print("Started over, Running...")
+        except Exception as e:
+            print(e)
+            print("Miscellaneous exception (potentially timeout) encountered, 15 min sleep...")
+            time.sleep(900)
+            print("Started over, Running...")
 
-#function where if someone tweets:
-
-# @DefineAllWords ... #define <word> ...
-# we reply to their tweet with the definition, the same as it would be run for the fck bot
-
-# class MyStreamListener(tweepy.StreamListener):
-
-#     def on_status(self, status):
-#         print(status.text)
-
-    # def on_error(self, status_code):
-    #     if status_code == 420:-
-    #         #returning False in on_error disconnects the stream
-    #         return False
-
-# myStreamListener = MyStreamListener()
-# myStream = tweepy.Stream(auth = api.auth, listener=myStreamListener)
-
-# myStream.filter(track=['@DefineAllWords'])
-
-# def main():
-#   makeTweets() #for single runs
-        
 if __name__ == '__main__':
     main()
-
