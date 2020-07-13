@@ -78,7 +78,10 @@ def defineWord(word): #defines word directly from merriam-webster api if possibl
                     return (word + ' ('+meaning['fl']+'): ' + '\n' +
                             result[0])
                 except:
-                    return word + ': ' + soup.find(class_="cxl-ref").get_text()
+                    try:
+                        return word + ': ' + soup.find(class_="cxl-ref").get_text()
+                    except:
+                        return word + ": We're not too sure about this one... or at least Merriam Webster isn't..."
                 
 
 
@@ -255,52 +258,52 @@ class MyStreamListener(tweepy.StreamListener): #Twitter StreamListener
 def processTweet(status): #Define on command functionality, reroutes to makeTweets if appropriate
 
     if "@DefineAllWords" in status.text and "#define" in status.text and "RT" not in status.text:
-        # try:
-        print("Define request found: " + status.text)
-        words = status.text.split()
-        i = words.index("#define") + 1
-        chars = "".join(re.split("[^a-zA-Z]*", words[i]))
-        media_id = getMediaID(chars)
-        definition = defineWord(chars)
-        definition_phrase = "@" + status.user.screen_name + ' ' + status.user.name + ", here's " + chars + " defined! " + '\n' + definition
-        print(definition_phrase)
-        definition_length = len(definition_phrase)
+        try:
+            print("Define request found: " + status.text)
+            words = status.text.split()
+            i = words.index("#define") + 1
+            chars = "".join(re.split("[^a-zA-Z]*", words[i]))
+            media_id = getMediaID(chars)
+            definition = defineWord(chars)
+            definition_phrase = "@" + status.user.screen_name + ' ' + status.user.name + ", here's " + chars + " defined! " + '\n' + definition
+            print(definition_phrase)
+            definition_length = len(definition_phrase)
 
-        if definition_length <= 280:
-            api.update_status(status = definition_phrase, in_reply_to_status_id = status.id_str, media_ids=media_id)
+            if definition_length <= 280:
+                api.update_status(status = definition_phrase, in_reply_to_status_id = status.id_str, media_ids=media_id)
 
-        else:
-            first_definition = definition_phrase[:280]
-            leftover = definition_phrase[280:]
+            else:
+                first_definition = definition_phrase[:280]
+                leftover = definition_phrase[280:]
 
-            new_tweets = len(leftover)//280 + 1
-            last_length = len(leftover) % 280
-            last_id = api.update_status(status = first_definition, in_reply_to_status_id = status.id_str, media_ids=media_id).id_str
+                new_tweets = len(leftover)//280 + 1
+                last_length = len(leftover) % 280
+                last_id = api.update_status(status = first_definition, in_reply_to_status_id = status.id_str, media_ids=media_id).id_str
 
-            print("Beginning reply chain...")
+                print("Beginning reply chain...")
 
-            for i in range(new_tweets):
-                if i == new_tweets - 1:
-                    reply_tweet = leftover[:last_length]
-                    api.update_status(status = reply_tweet, in_reply_to_status_id = last_id)
-                    print(reply_tweet)
-                else:
-                    reply_tweet = leftover[:280]
-                    leftover = leftover[280:]
-                    last_id = api.update_status(status = reply_tweet, in_reply_to_status_id = last_id).id_str
-                    print(reply_tweet)
-                    
-        deleteImage()
+                for i in range(new_tweets):
+                    if i == new_tweets - 1:
+                        reply_tweet = leftover[:last_length]
+                        api.update_status(status = reply_tweet, in_reply_to_status_id = last_id)
+                        print(reply_tweet)
+                    else:
+                        reply_tweet = leftover[:280]
+                        leftover = leftover[280:]
+                        last_id = api.update_status(status = reply_tweet, in_reply_to_status_id = last_id).id_str
+                        print(reply_tweet)
+                        
+            deleteImage()
 
-        # except Exception as e:
-        #     print("Define Request Exception Encountered:")
-        #     print(e)
-        #     exception_reply = "@" + status.user.screen_name + " Whoops! We either don't know that word or your request wasn't formatted correctly... To request a definition, tag me and include #define <insert a real word here>."
-        #     api.update_status(status = exception_reply, in_reply_to_status_id = status.id_str)
-        #     try:
-        #         deleteImage()
-        #     except:
-        #         pass
+        except Exception as e:
+            print("Define Request Exception Encountered:")
+            print(e)
+            exception_reply = "@" + status.user.screen_name + " Whoops! We either don't know that word or your request wasn't formatted correctly... To request a definition, tag me and include #define <insert a real word here>."
+            api.update_status(status = exception_reply, in_reply_to_status_id = status.id_str)
+            try:
+                deleteImage()
+            except:
+                pass
         print("------------FINISHED-------------")
                     
     elif status.user.id_str == "944864788336824321":
