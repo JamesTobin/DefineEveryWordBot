@@ -74,18 +74,31 @@ def defineWord(word): #defines word directly from merriam-webster api if possibl
                         result[0] + '\n' +
                         result[1])
             except:
-                return (word + ' ('+meaning['fl']+'): ' + '\n' +
-                        result[0])
+                try:
+                    return (word + ' ('+meaning['fl']+'): ' + '\n' +
+                            result[0])
+                except:
+                    return word + ': ' + soup.find(class_="cxl-ref").get_text()
+                
 
 
 def getMediaID(word): #downloads and retrieves the media ID for an image of a requested word
-    try:
-        keyfile = open(r"C:\Users\noahk\DefineEveryWordBot\gkey.txt", 'r')
-        gkey = keyfile.readline()
-        cx_file = open(r"C:\Users\noahk\DefineEveryWordBot\cx_id.txt", 'r')
-        cx_id = str(cx_file.readline())
-        gis = GoogleImagesSearch(gkey, cx_id)
+    d = os.listdir(r'C:\Users\noahk\DefineEveryWordBot\twitter-images')
+    if len(d)!=0:
+        for f in d:
+            os.remove(r'C:\Users\noahk\DefineEveryWordBot\twitter-images' + "\\"+ f)
+    keyfile = open(r"C:\Users\noahk\DefineEveryWordBot\gkey.txt", 'r')
+    gkey = keyfile.readline()
+    cx_file = open(r"C:\Users\noahk\DefineEveryWordBot\cx_id.txt", 'r')
+    cx_id = str(cx_file.readline())
 
+    keyfile2 = open(r"C:\Users\noahk\DefineEveryWordBot\gkey2.txt", 'r')
+    gkey2 = keyfile2.readline()
+    cx_file2 = open(r"C:\Users\noahk\DefineEveryWordBot\cx_id2.txt", 'r')
+    cx_id2 = str(cx_file2.readline())
+
+    try:
+        gis = GoogleImagesSearch(gkey, cx_id)
         # define search params:
         _search_params = {
             'q': word,
@@ -116,7 +129,40 @@ def getMediaID(word): #downloads and retrieves the media ID for an image of a re
 
         return media_list
     except:
-        return []
+        try:
+            gis = GoogleImagesSearch(gkey2, cx_id)
+            _search_params = {
+            'q': word,
+            'num': 1,
+            'safe': 'off',
+            # 'fileType': 'jpg|gif|png',
+            # 'imgType': 'clipart|face|lineart|news|photo',
+            # 'imgSize': 'huge|icon|large|medium|small|xlarge|xxlarge',
+            # 'imgDominantColor': 'black|blue|brown|gray|green|pink|purple|teal|white|yellow'
+        }
+
+            # this will search and download:
+            gis.search(search_params=_search_params, path_to_dir=r'C:\Users\noahk\DefineEveryWordBot\twitter-images')
+
+            img = os.listdir(r'C:\Users\noahk\DefineEveryWordBot\twitter-images')[0]
+            img_file = r'C:\Users\noahk\DefineEveryWordBot\twitter-images' + "\\" + img
+
+            media_list = []
+
+            p = open(r'C:\Users\noahk\DefineEveryWordBot\profanity.txt', 'r')
+            plist = []
+            for line in p:
+                plist.append(line.strip())
+
+            if word not in plist:
+                response = api.media_upload(img_file)
+                media_list.append(response.media_id_string)
+
+            return media_list
+        except:
+            return []
+
+    
 
 
 def deleteImage():
@@ -209,52 +255,52 @@ class MyStreamListener(tweepy.StreamListener): #Twitter StreamListener
 def processTweet(status): #Define on command functionality, reroutes to makeTweets if appropriate
 
     if "@DefineAllWords" in status.text and "#define" in status.text and "RT" not in status.text:
-        try:
-            print("Define request found: " + status.text)
-            words = status.text.split()
-            i = words.index("#define") + 1
-            chars = "".join(re.split("[^a-zA-Z]*", words[i]))
-            media_id = getMediaID(chars)
-            definition = defineWord(chars)
-            definition_phrase = "@" + status.user.screen_name + ' ' + status.user.name + ", here's " + chars + " defined! " + '\n' + definition
-            print(definition_phrase)
-            definition_length = len(definition_phrase)
+        # try:
+        print("Define request found: " + status.text)
+        words = status.text.split()
+        i = words.index("#define") + 1
+        chars = "".join(re.split("[^a-zA-Z]*", words[i]))
+        media_id = getMediaID(chars)
+        definition = defineWord(chars)
+        definition_phrase = "@" + status.user.screen_name + ' ' + status.user.name + ", here's " + chars + " defined! " + '\n' + definition
+        print(definition_phrase)
+        definition_length = len(definition_phrase)
 
-            if definition_length <= 280:
-                api.update_status(status = definition_phrase, in_reply_to_status_id = status.id_str, media_ids=media_id)
+        if definition_length <= 280:
+            api.update_status(status = definition_phrase, in_reply_to_status_id = status.id_str, media_ids=media_id)
 
-            else:
-                first_definition = definition_phrase[:280]
-                leftover = definition_phrase[280:]
+        else:
+            first_definition = definition_phrase[:280]
+            leftover = definition_phrase[280:]
 
-                new_tweets = len(leftover)//280 + 1
-                last_length = len(leftover) % 280
-                last_id = api.update_status(status = first_definition, in_reply_to_status_id = status.id_str, media_ids=media_id).id_str
+            new_tweets = len(leftover)//280 + 1
+            last_length = len(leftover) % 280
+            last_id = api.update_status(status = first_definition, in_reply_to_status_id = status.id_str, media_ids=media_id).id_str
 
-                print("Beginning reply chain...")
+            print("Beginning reply chain...")
 
-                for i in range(new_tweets):
-                    if i == new_tweets - 1:
-                        reply_tweet = leftover[:last_length]
-                        api.update_status(status = reply_tweet, in_reply_to_status_id = last_id)
-                        print(reply_tweet)
-                    else:
-                        reply_tweet = leftover[:280]
-                        leftover = leftover[280:]
-                        last_id = api.update_status(status = reply_tweet, in_reply_to_status_id = last_id).id_str
-                        print(reply_tweet)
-                        
-            deleteImage()
+            for i in range(new_tweets):
+                if i == new_tweets - 1:
+                    reply_tweet = leftover[:last_length]
+                    api.update_status(status = reply_tweet, in_reply_to_status_id = last_id)
+                    print(reply_tweet)
+                else:
+                    reply_tweet = leftover[:280]
+                    leftover = leftover[280:]
+                    last_id = api.update_status(status = reply_tweet, in_reply_to_status_id = last_id).id_str
+                    print(reply_tweet)
+                    
+        deleteImage()
 
-        except Exception as e:
-            print("Define Request Exception Encountered:")
-            print(e)
-            exception_reply = "@" + status.user.screen_name + " Whoops! We either don't know that word or your request wasn't formatted correctly... To request a definition, tag me and include #define <insert a real word here>."
-            api.update_status(status = exception_reply, in_reply_to_status_id = status.id_str)
-            try:
-                deleteImage()
-            except:
-                pass
+        # except Exception as e:
+        #     print("Define Request Exception Encountered:")
+        #     print(e)
+        #     exception_reply = "@" + status.user.screen_name + " Whoops! We either don't know that word or your request wasn't formatted correctly... To request a definition, tag me and include #define <insert a real word here>."
+        #     api.update_status(status = exception_reply, in_reply_to_status_id = status.id_str)
+        #     try:
+        #         deleteImage()
+        #     except:
+        #         pass
         print("------------FINISHED-------------")
                     
     elif status.user.id_str == "944864788336824321":
