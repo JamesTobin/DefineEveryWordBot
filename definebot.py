@@ -176,7 +176,7 @@ def deleteImage():
         os.remove(img_file)
 
 def makeTweets(word,most_recent_id): #tweets reply with definition, and tweets out own definition
-    phrase = "In case you didn't know..."
+    phrase = "In case you didn't f**king know..."
     definition = defineWord(word)
     reply_definition = definition
     media_id = getMediaID(word)
